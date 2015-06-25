@@ -7,9 +7,665 @@
     <script src="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.js"></script>
   </head>
   <body class="mixpanel-platform-body">
-    <h1>Hello, World!</h1>
+    <h1>A/B Test: Experiment Detail</h1>
+    <div id="experiment">
+      <div class="left">
+        <h2>Experiment (People Property Name)</h2>
+        <div id="people-prop-select"></div>
+      </div>
+      <div class="middle">
+        <h2>Experiment Name (Event Property)</h2>
+        <div id="event-prop-select"></div>
+      </div>
+      <div class="right">
+        <h2>Baseline</h2>
+        <div id="baseline-select"></div>
+      </div>
+      <div class="start"></div>
+      <br><hr><br>
+      <div class="conversion a">
+        <h2>Conversion Event 1</h2>
+        <div id="conversion-event-a"></div>
+        <div class="select where a mixpanel-platform-label">where</div>
+        <div class="select prop" id="conversion-prop-a"></div>
+        <div class="select contains a"></div>
+        <div class="select prop" id="conversion-prop-value-a"></div>
+        <div class="report" id="table-a"></div>
+        <p class="improvement a">Improvement over time</p>
+        <div class="report" id="funnel-a"></div>
+      </div>
+      <br><hr><br>
+      <div class="conversion b">
+        <h2>Conversion Event 2</h2>
+        <div id="conversion-event-b"></div>
+        <div class="select where b mixpanel-platform-label">where</div>
+        <div class="select prop" id="conversion-prop-b"></div>
+        <div class="select contains b"></div>
+        <div class="select prop" id="conversion-prop-value-b"></div>
+        <div class="report" id="table-b"></div>
+        <p class="improvement b">Improvement over time</p>
+        <div class="report" id="funnel-b"></div>
+      </div>
+    </div>
+    <style>
+      body {
+        color: rgb(95,105,131);
+      }
+      h1 {
+        font-size: 22px;
+        margin-bottom: 20px;
+      }
+      h2 {
+        font-size: 15px;
+        margin-bottom: 10px;
+      }
+      p {
+        font-size: 13px;
+      }
+      .left, .middle, .right {
+        width: 30%;
+        display: inline-block;
+      }
+      .select {
+        margin: 15px 15px 0 0;
+      }
+      .where {
+        line-height: 33px;
+      }
+      .where, .contains {
+        display: none;
+      }
+      .report {
+        margin: 15px 0 0;
+      }
+      .start, .improvement {
+        display: none;
+      }
+      .improvement {
+        margin-top: 15px;
+      }
+      .bold {
+        font-weight: bold;
+      }
+    </style>
     <script>
-      // Run queries and display results here
+      // set any or all of the following variables to make them fixed in the report
+      // these strings are CASE SENSITIVE!
+
+      var setExperimentPeopleProperty = 'Experiment: New Gallery Flow';   // e.g., 'Experiment: New Gallery Flow'
+      var setExperimentEventProperty = 'New Gallery Flow';    // e.g., 'New Gallery Flow'
+      var setBaseline = 'Original version';                   // e.g., 'Original version'
+
+      var setConversionEvent = [],
+          setConversionProperty = [],
+          setConversionPropertyValue = [];
+
+      setConversionEvent['a'] = 'App - First Payment';           // e.g., 'App - First Payment', 'App - Added Content', etc.
+      setConversionProperty['a'] = '';        // e.g., 'Campaign Type', 'emailFormat', 'First Payment Plan Type' etc.
+      setConversionPropertyValue['a'] = '';   // e.g., 'Regular', 'EmailBuilder', 'Monthly Basic', etc.
+
+      setConversionEvent['b'] = 'App - Added Content';           // e.g., 'App - First Payment', 'App - Added Content', etc.
+      setConversionProperty['b'] = '';        // e.g., 'Campaign Type', 'emailFormat', 'First Payment Plan Type' etc.
+      setConversionPropertyValue['b'] = '';   // e.g., 'Regular', 'EmailBuilder', 'Monthly Basic', etc.
+            
+      // only necessarily if running reports locally
+      MP.api.setCredentials('68b81fb0afb02354b0a977997f849628', '549b821284a202ce211c0c1befb60c31');
+    
+      // set up global variables
+      var peopleProps = {
+            items: [
+              {label: "-- Select experiment name --", value: ""}
+            ]
+          },
+          eventPropValues = {
+            items: [
+              {label: '-- Select experiment name --', value: ""}
+            ]
+          },
+          baselineValues = {
+            items: [
+              {label: '-- Select baseline --', value: ""}
+              ]
+          },
+          queryOptions = {
+            items: [
+              {label: 'contains', value: 'contains'},
+              {label: 'does not contain', value: 'does not contain'},
+              {label: 'equals', value: 'equals'},
+              {label: 'does not equal', value: 'does not equal'},
+              {label: 'is set', value: 'is set'},
+              {label: 'is not set', value: 'is not set'}
+              ]
+          },
+          propVals = [],
+          eventParams = {},
+          eventParams2 = {},
+          experimentSelect = '',
+          eventSelect = '',
+          baselineSelect ='',
+          conversionSelects = [],
+          propertySelects = [],
+          queries = [],
+          propValueSelects = [],
+          funnelSelects = [],
+          tableSelects = [];
+
+      function propValueSetup(event, propValue) {
+        propertySelects[event] = propValue;
+        propVals[event] = {
+          items: [ 
+            {label: '-- Select property value --', value: ''} 
+            ]
+        };
+
+        // create dropdown of property values for selected property
+        if (setConversionPropertyValue[event]) {
+          $('#conversion-prop-value-' + event).text(setConversionPropertyValue[event]).css('display', 'inline-block');
+          propValueSelects[event] = setConversionPropertyValue[event];
+        }
+        else {
+          eventParams = {
+                event: conversionSelects[event],
+                name: propertySelects[event],
+                limit: 255
+              };
+          MP.api.query('api/2.0/events/properties/values', eventParams).done(function(array) {
+            for (property in array) {
+              propVals[event].items.push({label: array[property], value: array[property]});
+            }
+            $('#conversion-prop-value-' + event).MPSelect(propVals[event]).css('display', 'inline-block');
+          });
+        }
+      }
+      function propSetup(event, eventValue) {
+
+        $('.where.a').css('display', 'inline-block');
+        // assign conversion event to value of dropdown or set value
+        conversionSelects[event] = eventValue;
+        // create dropdown that provides query options
+        $('.contains.' + event).MPSelect(queryOptions).css('display', 'inline-block');
+
+        if (setConversionProperty[event]) {
+          $('#conversion-prop-' + event).text(setConversionProperty[event]).css('display', 'inline-block');
+          propValueSetup(event, setConversionProperty[event]);
+        }
+        else {
+          $('#conversion-prop-' + event).MPPropertySelect();
+          $('#conversion-prop-' + event).MPPropertySelect('setEvent', eventValue).css('display', 'inline-block');
+        }
+
+        if ( (baselineSelect || setBaseline) 
+             && (experimentSelect || setExperimentPeopleProperty) 
+             && (eventSelect || setExperimentEventProperty) ) {
+          runQuery(event);
+        }
+
+      }
+      function eventSetup(event) {
+        if (setConversionEvent[event]) {
+          $('#conversion-event-' + event).text(setConversionEvent[event]);
+          propSetup(event, setConversionEvent[event]);
+        }
+        else {
+          $('#conversion-event-' + event).MPEventSelect();
+        }
+      }
+          
+      function addExperiment() {
+
+        if ( setExperimentPeopleProperty ) {
+          $('#people-prop-select').text(setExperimentPeopleProperty);
+        }
+        else {
+          // query People to create the dropdown of people properties
+          MP.api.query('/api/2.0/engage/properties').done(function(json) {
+            for (property in json.results) {
+              peopleProps.items.push({label: property, value: property});
+            }
+            experimentSelect = $('#people-prop-select').MPSelect(peopleProps);
+          });
+        }
+        
+        if ( setExperimentEventProperty ) {
+          $('#event-prop-select').text(setExperimentEventProperty);
+        }
+        else {
+          // query property values for experiment names on the Experiment Viewed event to create dropdown of event properties
+          eventParameters = {event: "App - Experiment Enrolled", name: "experiment_name", limit: 255}
+          MP.api.query('api/2.0/events/properties/values', eventParameters).done(function(array) {
+            for (property in array) {
+              eventPropValues.items.push({label: array[property], value: array[property]});
+            }
+            eventSelect = $('#event-prop-select').MPSelect(eventPropValues);
+          });
+        }
+        
+        if ( setBaseline ) {
+          $('#baseline-select').text(setBaseline);
+        }
+        else {
+          // set baseline dropdown
+          variantParameters = {event: 'App - Experiment Enrolled', name: 'variation_name', limit: 255}
+          MP.api.query('api/2.0/events/properties/values', variantParameters).done(function(array) {
+            for (variant in array) {
+              baselineValues.items.push({label: array[variant], value: array[variant]});
+            }
+            baselineSelect = $('#baseline-select').MPSelect(baselineValues);
+          });
+        }
+
+        // create event, property, property value dropdowns if no conversion events, props, prop values were specified  
+        eventSetup('a');
+        eventSetup('b');
+
+        // set up funnel graphs (will show improvement of all variants over time)
+        funnelSelects['a'] = $('#funnel-a').MPChart({chartType: 'line'});
+        funnelSelects['b'] = $('#funnel-b').MPChart({chartType: 'line'});
+
+        // set up tables
+        tableSelects['a'] = $('#table-a').MPTable();
+        tableSelects['b'] = $('#table-b').MPTable();
+
+      }
+      
+      function calcStats(total0, success0, total1, success1) {
+        
+        // calculate conversion rates
+        var conv0 = success0 / total0,
+            conv1 = success1 / total1;
+
+        if ( isNaN(conv1) || isNaN(conv0) ) {
+          var variant_stats = ['N/A', '', 'N/A', '']
+        }
+        else if ( conv0 == 0 ) {
+          var variant_stats = ['Conversion of original cannot equal 0', '', 'N/A', ''];
+        }
+        else {
+          // calculate improvement over baseline
+          var improvement = (conv1 - conv0) / conv0;
+          if (isNaN(improvement) || improvement == Infinity) {
+            $.noop();
+          }
+          else {
+            improvement = (improvement * 100).toFixed(1) + '%';
+            if (improvement > 0) {
+              improvement = '+' + improvement;
+            }
+          }
+          
+          // calculate standard error, confidence interval, z score, 
+          // and chance to beat baseline
+          var se0 = Math.sqrt(conv0*(1-conv0)/total0),
+              se1 = Math.sqrt(conv1*(1-conv1)/total1),
+              ci = '(±' + (1.96 * se1).toFixed(2) + '%)',
+              zscore = ((conv1 - conv0) / Math.sqrt(Math.pow(se1,2) + Math.pow(se0,2))),
+              // the following is from http://picomath.org/javascript/phi.js.html
+              // constants
+              a1 = 0.254829592,
+              a2 = -0.284496736,
+              a3 =  1.421413741,
+              a4 = -1.453152027,
+              a5 =  1.061405429,
+              p  =  0.3275911;
+
+          // save the sign of zscore
+          var sign = 1;
+          if (zscore < 0) {
+            sign = -1
+          }
+          zscore = Math.abs(zscore)/Math.sqrt(2.0);
+          
+          var t = 1.0/(1.0 + p*zscore);
+          var y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*Math.exp(-zscore*zscore);
+          
+          var chance = (isNaN(zscore)) ? '--' : 0.5*(1.0 + sign*y),
+              result = '--';
+          
+          // assign significance if applicable
+          if (total1 < 10) {
+            chance = 'Sample size too small'
+          }
+          else if (chance >= 0.95) {
+            result = 'Win'
+          }
+          else if (chance <= 0.05) {
+            result = 'Lose'
+          }
+          else if (0.95 > chance > 0.05) {
+            result = 'Not Significant'
+          }
+          
+          if (isNaN(chance)) {
+            $.noop();
+          }
+          else {
+            chance = (chance * 100).toFixed(1) + '%';
+          }
+          
+          var variant_stats = [improvement, ci, chance, result];
+        }
+        
+        return variant_stats;
+        
+      }
+      
+      function runQuery(event) {
+        // collect either dropdown values from the UI or text values from the html
+        var experiment = (setExperimentPeopleProperty) ? setExperimentPeopleProperty : experimentSelect.val();
+        var experimentEvent = (setExperimentEventProperty) ? setExperimentEventProperty : eventSelect.val();
+        var baseline = (setBaseline) ? setBaseline : baselineSelect.val();
+
+        if ( experiment && experimentEvent && baseline && conversionSelects[event]) {
+          var conversionEvent = conversionSelects[event],
+              conversionProp = (propertySelects[event]) ? propertySelects[event] : undefined,
+              conversionPropQuery = ($('.contains.' + event).val()) ? $('.contains.' + event).val() : undefined,
+              conversionPropValue = (propValueSelects[event]) ? propValueSelects[event] : undefined;
+
+          // set global variable for people object
+          var people = {};
+              
+          people['total'] = {'count': 0, 'first': 0.00, 'lifetime': 0.00}
+              
+          MP.api.people().done(function(json) {
+            // people requests will only return 1,000 People profiles, so your averages will include only a sample
+            // monetization is currently tracking average first payment and lifetime revenue *of everyone in the experiment* not just people who paid
+
+            parameters = {'session_id': json.values().session_id, 'page': 0};
+            has_results = true;
+            
+            profiles = json.values().results;
+            for (var profile in profiles) {
+              if (profiles.hasOwnProperty(profile)) {
+                if (profiles[profile].$properties.hasOwnProperty(experiment)) {
+                  
+                  people['total']['count'] += 1;
+
+                  var distinct = profiles[profile].$distinct_id,
+                      experimentValue = profiles[profile].$properties[experiment];
+                      
+                  if (people[experimentValue]) { 
+                    people[experimentValue]['count'] += 1;
+                  }
+                  else {
+                    people[experimentValue] = {'count': 1, 'first': 0.00, 'lifetime': 0.00};
+                  }
+                  
+                  if (profiles[profile].$properties.hasOwnProperty('First Payment Amount')) {
+                    var firstRevenue = profiles[profile].$properties['First Payment Amount'];
+                    people[experimentValue]['first'] += firstRevenue;
+                    people['total']['first'] += firstRevenue;
+                  }
+                  if (profiles[profile].$properties.hasOwnProperty('Lifetime Revenue')) {
+                    var lifeRevenue = profiles[profile].$properties['Lifetime Revenue'];
+                    people[experimentValue]['lifetime'] += lifeRevenue;
+                    people['total']['lifetime'] += lifeRevenue;
+                  }
+                }
+              }
+            }
+            
+          });
+          
+          function today() {
+          // format today's date to fit as a valid "to" parameter in the Mixpanel funnel query
+            var today = new Date();
+            var dd = today.getDate();
+            var mm = today.getMonth()+1; // January is 0
+            var yyyy = today.getFullYear();
+            
+            if(dd<10) {
+                dd='0'+dd
+            } 
+            
+            if(mm<10) {
+                mm='0'+mm
+            } 
+            
+            return yyyy+'-'+mm+'-'+dd;
+          }
+          
+          var funnelParameters = {
+                from: '2015-06-01',
+                to: today(),
+                segment: 'variation_name',
+                where: 'properties["experiment_name"] == "' + experimentEvent + '"'
+              };
+          
+          var eventObject,
+              selector = '';
+          // define selector for conversion event in funnel based on query dropdown
+          if (conversionPropValue) {
+            if (conversionPropQuery == 'contains') {
+              selector = '"' + conversionPropValue + '" in string(properties["' + conversionProp + '"])'
+            }
+            else if (conversionPropQuery == 'does not contain') {
+              selector = 'not "' + conversionPropValue + '" in string(properties["' + conversionProp + '"])'
+            }
+            else if (conversionPropQuery == 'equals') {
+              selector = '(string(properties["' + conversionProp + '"]) == "' + conversionPropValue + '")'
+            }
+            else if (conversionPropQuery == 'does not equal') {
+              selector = '(string(properties["' + conversionProp + '"]) != "' + conversionPropValue + '")'
+            }
+            else if (conversionPropQuery == 'is set') {
+              selector = 'defined (properties["' + conversionProp + '"])'
+            }
+            else if (conversionPropQuery == 'is not set') {
+              selector = 'not defined (properties["' + conversionProp + '"])'
+            }
+          }
+
+          if (selector) {
+            eventObject = {'event': conversionEvent, 'selector': selector};
+          }
+          else {
+            eventObject = conversionEvent;
+          }
+          
+          // query Mixpanel for funnel information and transform it to populate the graph and table
+          MP.api.funnel('App - Experiment Enrolled', eventObject, funnelParameters).done(function(results) {
+            var funnelObject = {},
+                abObject = {},
+                tableObject = {};
+                
+            for (variant in results) {
+              funnelObject[variant] = {};
+              tableObject[variant] = {'*Experiment Viewed':0};
+              tableObject[variant][conversionEvent] = 0;
+              
+              for (date in results[variant]) {
+                funnelObject[variant][date] = {1: results[variant][date][0].count, 2: results[variant][date][1].count}
+                tableObject[variant]['*Experiment Viewed'] += results[variant][date][0].count;
+                tableObject[variant][conversionEvent] += results[variant][date][1].count;
+              }
+              var conversion = tableObject[variant][conversionEvent] / tableObject[variant]['*Experiment Viewed'];
+              if (!isNaN(conversion)) {
+                tableObject[variant]['~Conversion'] = (conversion * 100).toFixed(2) + '%';
+              }
+              else {
+                tableObject[variant]['~Conversion'] = 'N/A';
+              }
+            }
+            
+            var startDate = [];
+
+            if (!funnelObject[baseline]) {
+              $('<div class="error"></div><br>')
+                .text('Error: Experiment Name or Baseline may be incorrect (check spelling - case sensitive!), or the property value you selected contains no experiment results. Please refresh report.')
+                .css('color', 'red')
+                .prependTo($('.conversion.' + event));
+            }
+
+            // for each variant:
+            // take all dates in funnel object, sort them, then grab values to calculate improvement over time,
+            // to maintain order of the dates in the object
+            for (variant in funnelObject) {
+              if (variant != baseline && variant != '$overall') {
+                var abList = [],
+                    totalVar = 0,
+                    totalBase = 0,
+                    convVar = 0,
+                    convBase = 0;
+                abObject[variant] = {};
+                for (date in funnelObject[variant]) {
+                  abList.push(date);
+                }
+                abList.sort();
+                for (var i in abList) {
+                  var date = abList[i];
+                  if ( totalVar == 0 && totalBase == 0 ) {
+                    startDate[variant] = date;
+                  }
+                  totalVar += funnelObject[variant][date][1];
+                  convVar += funnelObject[variant][date][2];
+                  totalBase += funnelObject[baseline][date][1];
+                  convBase += funnelObject[baseline][date][2];
+                  var improve = (convVar/totalVar - convBase/totalBase)/(convBase/totalBase);
+                  abObject[variant][date] = improve;
+                }
+              }
+            }
+            var startDateList = [];
+            for (variant in startDate) {
+              startDateList.push(startDate[variant]);
+            }
+            startDateList.sort();
+            startDate = startDateList[0];
+            for (variant in abObject) {
+              for (date in abObject[variant]) {
+                if ( date < startDate || abObject[variant][date] == Infinity || isNaN(abObject[variant][date]) ) {
+                  delete abObject[variant][date];
+                }
+              }
+            }
+            function parseDate(str) {
+              var mdy = str.split('-');
+              return new Date(mdy[0], mdy[1]-1, mdy[2]);
+            }
+            function daydiff(first, second) {
+              return (second-first)/(1000*60*60*24);
+            }
+            var duration = daydiff(parseDate(startDate), parseDate(today()));
+
+            if ( $('.start').text() ) {
+              $.noop();
+            }
+            else {
+              $('.start').append('<p>Start Date: <span class="bold">' + startDate + '</span></p><p>Experiment Duration: <span class="bold">' + duration.toFixed(0) + ' days</span></p>');
+            }
+
+            for (variant in tableObject) {
+              if ( tableObject['Original version'] ) {
+                var origTotal = tableObject['Original version']['*Experiment Viewed'],
+                    origSuccess = tableObject['Original version'][conversionEvent];
+              }
+              else {
+                var origTotal = 0,
+                    origSuccess = 0;
+              }
+              var varTotal = tableObject[variant]['*Experiment Viewed'],
+                  varSuccess = tableObject[variant][conversionEvent];
+              
+              stats = calcStats(origTotal, origSuccess, varTotal, varSuccess);
+              tableObject[variant]['~~Improvement'] = stats[0];
+              tableObject[variant]['~Conversion'] += ' ' + stats[1];
+              tableObject[variant]['~~~Chance to Beat Original'] = stats[2];
+              if (stats[3] != '--') {
+                tableObject[variant]['~~~Chance to Beat Original'] += ' (' + stats[3] + ')';
+              }
+              
+              if (people.hasOwnProperty(variant)) {
+                if (people[variant]['count'] != 0) {
+                  tableObject[variant]['~~~~Average First Payment'] = '$' + (people[variant]['first'] / people[variant]['count']).toFixed(2);
+                  tableObject[variant]['~~~~Average Lifetime Revenue'] = '$' + (people[variant]['lifetime'] / people[variant]['count']).toFixed(2);
+                }
+                else {
+                  tableObject[variant]['~~~~Average First Payment'] = '--';
+                  tableObject[variant]['~~~~Average Lifetime Revenue'] = '--';
+                }
+              }
+              else if (variant == '$overall') {
+                if (people['total']['count'] != 0) {
+                  tableObject[variant]['~~~~Average First Payment'] = '$' + (people['total']['first'] / people['total']['count']).toFixed(2);
+                  tableObject[variant]['~~~~Average Lifetime Revenue'] = '$' + (people['total']['lifetime'] / people['total']['count']).toFixed(2);
+                }
+                else {
+                  tableObject[variant]['~~~~Average First Payment'] = '--';
+                  tableObject[variant]['~~~~Average Lifetime Revenue'] = '--';
+                }
+              }
+              else {
+                tableObject[variant]['~~~~Average First Payment'] = '--';
+                tableObject[variant]['~~~~Average Lifetime Revenue'] = '--';
+              }
+            }
+
+            tableObject['$overall']['~~Improvement'] = 'N/A'
+            tableObject['$overall']['~~~Chance to Beat Original'] = 'N/A'
+            if (tableObject['Original version']) {
+              tableObject['Original version']['~~Improvement'] = 'N/A'
+              tableObject['Original version']['~~~Chance to Beat Original'] = 'N/A'
+            
+            }
+
+            funnelSelects[event].MPChart('setData', abObject);
+            tableSelects[event].MPTable('setData', tableObject);
+            $('.improvement.' + event).show();
+            $('.start').show();
+            
+          });
+        }
+      }
+
+      addExperiment();
+
+      $('#people-prop-select').on('change', function() {
+        var exp = (setExperimentPeopleProperty) ? setExperimentPeopleProperty : (experimentSelect) ? experimentSelect.val() : '',
+            evt = (setExperimentEventProperty) ? setExperimentEventProperty : (eventSelect) ? eventSelect.val() : '';
+        if ( exp && evt && (exp).indexOf(evt) > -1 && ((baselineSelect) ? baselineSelect.val() : baselineSelect || setBaseline) ) {
+          runQuery('a');
+          runQuery('b');
+        }
+      });
+      $('#event-prop-select').on('change', function() {
+        var exp = (setExperimentPeopleProperty) ? setExperimentPeopleProperty : (experimentSelect) ? experimentSelect.val() : '',
+            evt = (setExperimentEventProperty) ? setExperimentEventProperty : (eventSelect) ? eventSelect.val() : '';
+        if ( exp && evt && (exp).indexOf(evt) > -1 && ((baselineSelect) ? baselineSelect.val() : baselineSelect || setBaseline) ) {
+          runQuery('a');
+          runQuery('b');
+        }
+      });
+      $('#baseline-select').on('change', function() {
+        var exp = (setExperimentPeopleProperty) ? setExperimentPeopleProperty : (experimentSelect) ? experimentSelect.val() : '',
+            evt = (setExperimentEventProperty) ? setExperimentEventProperty : (eventSelect) ? eventSelect.val() : '';
+        if ( exp && evt && (exp).indexOf(evt) > -1 ) {
+          runQuery('a');
+          runQuery('b');
+        }
+      })
+      
+      function setChanges(event) {
+        $('#conversion-event-' + event).on('change', function() {
+          runQuery(event);
+          propSetup(event, $(this).val());
+        });
+        $('#conversion-prop-' + event).on('change', function() {
+          propValueSetup(event, $(this).val());
+        });
+        $('.contains.' + event).on('change', function() {
+          if (propValueSelects[event]) {
+            runQuery(event);
+          }
+        });
+        $('#conversion-prop-value-' + event).on('change', function() {
+          propValueSelects[event] = $(this).val();
+          runQuery(event);
+        });
+      }
+
+      setChanges('a');
+      setChanges('b');
+
     </script>
   </body>
 </html>
